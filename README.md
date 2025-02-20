@@ -1,89 +1,119 @@
-# GFSK Modulation and BER Simulation in MATLAB
+# 📡 BLE Image Transmission System with GFSK Modulation
 
-## Overview
-This MATLAB script simulates a **Gaussian Frequency Shift Keying (GFSK)** communication system, where random bits are modulated, transmitted through an **Additive White Gaussian Noise (AWGN)** channel, and demodulated. It evaluates the system's performance by calculating the **Bit Error Rate (BER)** across different **Signal-to-Noise Ratio (SNR)** levels.
+## ⚠️ Important Implementation Note
+The current implementation has significant limitations in the packetization system. While the code structure includes packet handling functions, the actual data transmission largely bypasses the packet system due to implementation challenges. This means:
+- Packet headers are generated but not fully utilized
+- Error detection at packet level is limited
+- Packet reassembly is not fully implemented
+- The system essentially operates as a continuous bit stream
+
+Users should be aware that this is more of an educational demonstration of GFSK modulation and basic signal processing rather than a complete BLE protocol implementation.
+
+## 🎯 Overview
+This MATLAB implementation simulates a **Bluetooth Low Energy (BLE)** image transmission system using **Gaussian Frequency Shift Keying (GFSK)**. The system demonstrates image data transmission through an **Additive White Gaussian Noise (AWGN)** channel, incorporating error correction and data whitening techniques.
 
 ## Features
-- **GFSK Modulation**: Modulates data using Gaussian Frequency Shift Keying.
-- **AWGN Channel**: Simulates transmission over a noisy channel using Additive White Gaussian Noise.
-- **Forward Error Correction (FEC)**: Supports FEC encoding and decoding for enhanced reliability (Modes 2 and 8).
-- **BER Calculation**: Computes the Bit Error Rate to measure system performance.
-- **SNR Sweeps**: Simulates the effect of various SNR levels on BER.
+- 🖼️ **Image Processing**: 
+  - Supports both RGB and grayscale images
+  - Automatic RGB to grayscale conversion
+  - Binary data conversion and reconstruction
+- 📊 **Signal Processing**:
+  - GFSK modulation and demodulation
+  - Configurable modulation index and sampling rate
+  - AWGN channel simulation
+- 🛡️ **Error Correction**:
+  - Hamming code implementation
+  - Data whitening for improved transmission
+  - Basic packet structure (partially implemented)
 
-## File Structure
+## System Architecture
+
 ```
-├── main.m                # Main simulation script
-├── gfsk_modulation.m     # Function for GFSK modulation
-├── gfsk_demod.m          # Function for GFSK demodulation
-├── fec_enc.m             # FEC encoding function
-├── fec_decode.m          # FEC decoding function
-├── detector_synch.m      # Function for signal synchronization
-├── pattern_mapping.m     # Function for pattern mapping (Mode 8)
+Transmission Pipeline:
+Image → Binary → (Packet Headers*) → Hamming Encoding → Whitening → GFSK Modulation
+
+* Packet system present but not fully functional
+
+Reception Pipeline:
+GFSK Demodulation → De-whitening → Hamming Decoding → Binary → Image
 ```
 
 ## Requirements
-- **MATLAB R2020a or higher**
-- **Signal Processing Toolbox** (optional, but recommended)
+- MATLAB R2020a or higher
+- Required Toolboxes:
+  - Image Processing Toolbox
+  - Signal Processing Toolbox
+  - Communications Toolbox
 
-## Simulation Parameters
-- **Number of Bits**: 400 random bits per transmission.
-- **Modulation Index (h)**: 0.5
-- **Bandwidth-Time Product (B)**: 0.5
-- **Sampling Rate**: 2 (upsampling factor)
-- **SNR Range**: -4 dB to 10 dB (step of 2 dB)
-- **Modes**:
-  - **Mode 1**: No FEC.
-  - **Mode 2**: FEC applied to the payload.
-  - **Mode 8**: FEC + Pattern Mapping.
+## Parameters
+- **Modulation**:
+  - Samples per bit: 8
+  - GFSK modulation index: 0.7
+  - Gaussian filter BT product: 0.5
+- **Error Correction**:
+  - Hamming(7,4) coding
+  - Basic interleaving
+- **Channel**:
+  - Configurable SNR (default: 30 dB)
+  - AWGN channel simulation
 
-## How It Works
-1. **Payload Generation**: A random sequence of bits is generated.
-2. **FEC Encoding (Optional)**: If Mode 2 or Mode 8, FEC is applied.
-3. **Modulation**: The bits are modulated using GFSK.
-4. **Transmission**: The modulated signal is sent through an AWGN channel.
-5. **Noise Addition**: Noise is added based on SNR level.
-6. **Receiver Synchronization**: The receiver synchronizes with the signal.
-7. **Demodulation**: The received signal is demodulated to retrieve the bits.
-8. **FEC Decoding (Optional)**: If FEC was applied, the bits are decoded.
-9. **BER Calculation**: BER is computed by comparing transmitted and received bits.
-
-## Usage
-To run the simulation, execute the main script:
+## 🚀 Usage
 ```matlab
-clear; close all;
-main
+% Basic usage
+test_ble_system('path/to/your/image.jpg');
+
+% Advanced usage with custom parameters
+params.samples_per_bit = 8;
+params.modulation_index = 0.7;
+params.SNR_dB = 30;
+test_ble_system('path/to/your/image.jpg', params);
 ```
-This will:
-- Modulate, transmit, and demodulate data across multiple SNR values.
-- Plot the **BER vs. SNR** curve on a semilogarithmic scale.
 
-## Outputs
-- **BER Plot**: Displays the Bit Error Rate against SNR values to visualize system performance under different noise conditions.
+## Known Limitations
+1. **Major Packetization Issues** 🚨
+   - Packet system is mostly non-functional
+   - No proper packet synchronization
+   - Missing packet loss handling
+   - Limited error detection at packet level
 
-## Function Descriptions
-| Function | Description |
-|----------|-------------|
-| `gfsk_modulation()` | Performs GFSK modulation on input bits. |
-| `gfsk_demod()` | Recovers original bits from the modulated signal. |
-| `fec_enc()` | Encodes bits using FEC for error correction. |
-| `fec_decode()` | Decodes FEC-encoded bits. |
-| `detector_synch()` | Synchronizes the receiver with the signal. |
-| `pattern_mapping()` | Maps bits to a predefined pattern in Mode 8. |
+2. **Other Limitations**
+   - High sensitivity to noise
+   - Large memory requirements for big images
+   - Processing speed issues with high-resolution images
 
-## Example
-The following SNR values are simulated: **-4 dB to 10 dB**. The output graph shows how **BER decreases as SNR increases**, indicating improved system performance at higher SNR levels.
+## Debug Features
+- Signal constellation visualization
+- BER and PSNR measurements
+- Debug data saved to `debug_data.mat`
+- Real-time performance metrics
 
-```matlab
-semilogy(snrDb, BER);  % Plot BER vs SNR on a semilog scale
-xlabel('SNR (dB)');
-ylabel('Bit Error Rate (BER)');
-grid on;
-title('GFSK BER vs. SNR');
-```
+## 🔧 Troubleshooting
+If you encounter issues:
+1. Start with small test images
+2. Use high SNR values initially (>25dB)
+3. Monitor memory usage
+4. Check constellation plots
+5. Review debug data in `debug_data.mat`
+
+## Future Improvements Needed
+1. **Critical**:
+   - Complete packetization system implementation
+   - Proper packet synchronization
+   - Error detection and handling at packet level
+
+2. **General**:
+   - Noise resistance improvement
+   - Memory optimization
+   - Processing speed enhancement
+
+## 📚 Documentation
+All functions include detailed comments explaining their operation. Key files:
+- `transmit_ble_image.m`: Main transmission function
+- `receive_ble_signal.m`: Main reception function
+- `test_ble_system.m`: System testing and visualization
 
 ---
 
-### 📌 *Contributions and Issues*
-Feel free to **fork, contribute, or report issues** for improvements!
+🔬 *Note: This implementation is primarily for educational purposes and demonstrates basic GFSK modulation concepts. It should not be used as a reference for actual BLE protocol implementation.*
 
-🚀 Happy Coding!
+For technical questions or contributions, please create an issue or submit a pull request.

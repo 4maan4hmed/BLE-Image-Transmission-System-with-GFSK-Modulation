@@ -1,187 +1,208 @@
-function [I_signal, Q_signal] = transmit_ble_image(input_image_path, SNR_dB)
-    % Input validation
-    if nargin < 2
-        SNR_dB = 15; % Default SNR value
-    end
-    
-    % Load and validate image
-    try
-        input_image = imread(input_image_path);
-    catch
-        error('Unable to load image. Please check the file path.');
+function received_image = receive_ble_signal(I_signal, Q_signal, original_image_size, params)
+    % Set default parameters if not provided
+    if nargin < 4
+        params.samples_per_bit = 8;
+        params.modulation_index = 0.5;
+        params.packet_size = 256;
     end
     
     % Create figure for visualization
-    figure('Name', 'BLE Transmission Stages');
+    figure('Name', 'BLE Reception Stages');
     
-    % Stage 1: Image Preprocessing
-    fprintf('Stage 1: Image Preprocessing\n');
-    if size(input_image, 3) == 3
-        img_gray = rgb2gray(input_image);
-    else
-        img_gray = input_image;
-    end
+    % Stage 1: Signal Processing and Demodulation
+    fprintf('Stage 1: GFSK Demodulation\n');
+    received_bits = gfsk_demodulate(I_signal, Q_signal, params.samples_per_bit, params.modulation_index);
     
-
-    
+    % Plot received constellation
     subplot(3, 2, 1);
-    imshow(img_gray);
-    title('Grayscale Image');
+    plot_constellation(I_signal(1:1000), Q_signal(1:1000));
     
-    % Stage 2: Binary Conversion
-    fprintf('Stage 2: Binary Conversion\n');
-    binary_data = image_to_binary(img_gray);
-    
+    % Plot demodulated bits
     subplot(3, 2, 2);
-    plot_binary_sample(binary_data(1:100), 'Initial Binary Data');
+    plot_binary_sample(received_bits(1:100), 'Demodulated Bits');
     
-    % Stage 3: Packetization
-    fprintf('Stage 3: Packetization\n');
-    packet_size = 256;
-    packets = packetize_data(binary_data, packet_size);
+    % Stage 2: De-whitening
+    fprintf('Stage 2: Data De-whitening\n');
+    dewhitened_data = apply_data_dewhitening(received_bits);
     
     subplot(3, 2, 3);
-    visualize_packets(packets(1:2, :), 'Packetized Data Structure');
+    plot_binary_sample(dewhitened_data(1:100), 'De-whitened Data');
     
-    % Stage 4: Channel Coding (Hamming)
-    fprintf('Stage 4: Channel Coding\n');
-    encoded_data = apply_hamming_coding(binary_data);
+    % Stage 3: Hamming Decoding
+    fprintf('Stage 3: Hamming Decoding\n');
+    decoded_data = apply_hamming_decoding(dewhitened_data);
     
-    subplot(3, 2, 4);
-    plot_binary_sample(encoded_data(1:100), 'Hamming Encoded Data');
+    subplot(4, 2, 4);
+    plot_binary_sample(decoded_data(1:100), 'Decoded Data');
     
-    % Stage 5: Data Whitening
-    fprintf('Stage 5: Data Whitening\n');
-    whitened_data = apply_data_whitening(encoded_data);
+    % Stage 4: Depacketization
+    fprintf('Stage 4: Depacketization\n');
+    [depacketized_data, packet_success_rate] = depacketize_data(decoded_data, params.packet_size);
     
     subplot(3, 2, 5);
-    plot_binary_sample(whitened_data(1:100), 'Whitened Data');
+    visualize_packet_success(packet_success_rate, 'Packet Reception Success');
     
-    % Stage 6: GFSK Modulation
-    fprintf('Stage 6: GFSK Modulation\n');
-    samples_per_bit = 8;
-    modulation_index = 0.5;
-    [I_signal, Q_signal] = apply_gfsk_modulation(binary_data, modulation_index, samples_per_bit);
+    % Stage 5: Binary to Image Conversion
+    fprintf('Stage 5: Image Reconstruction\n');
+    received_image = binary_to_image(received_bits, original_image_size);
     
+    % Display reconstructed image
+    subplot(4, 2, 6);
+    imshow(received_image);
+    title('Reconstructed Image');
     
-    % Plot constellation
-    subplot(3, 2, 6);
-    plot_constellation(I_signal(1:1000), Q_signal(1:1000));
+    % Display error metrics
+    subplot(4, 2, [7,8]);
+    display_error_metrics(received_image, original_image_size);
 end
 
-function binary_data = image_to_binary(img)
-
-    img_vector = img(:);
+function demodulated_bits = gfsk_demodulate(I_signal, Q_signal, samples_per_bit, h_index)
+    % Calculate phase from I/Q
+    phase = unwrap(atan2(Q_signal, I_signal));
     
-    % Initialize binary array (8 bits per pixel)
-    binary_data = false(1, numel(img) * 8);
+    % Differentiate phase to get frequency deviation
+    freq_dev = diff(phase);
+    freq_dev = [freq_dev(1) freq_dev];  % Pad to maintain length
     
-    % Convert each pixel to 8 bits
-    for i = 1:numel(img)
-        % Get bit representation of current pixel
-        pixel_bits = bitget(img_vector(i), 8:-1:1);
-        % Store in binary array
-        binary_data((i-1)*8 + 1 : i*8) = pixel_bits;
-    end
+    % Apply matched filter
+    span = 4;
+    beta = 0.5;  % Gaussian filter parameter
+    t = (-span/2:1/samples_per_bit:span/2);
+    matched_filter = exp(-(t.^2)/(2*beta^2));
+    matched_filter = matched_filter/sum(matched_filter);
+    
+    filtered_signal = conv(freq_dev, matched_filter, 'same');
+    
+    % Sample at bit centers
+    bit_centers = samples_per_bit/2:samples_per_bit:length(filtered_signal);
+    sampled_signal = filtered_signal(round(bit_centers));
+    
+    % Decision threshold
+    demodulated_bits = sampled_signal > 0;
 end
 
-function packets = packetize_data(data, packet_size)
-    % Add preamble and access address to each packet
-    preamble = [1 0 1 0 1 0 1 0];  % Standard BLE preamble
-    access_address = randi([0 1], 1, 32);  % Random 32-bit access address
-    
-    data_bits_per_packet = packet_size * 8;
-    num_packets = ceil(length(data) / data_bits_per_packet);
-    
-    % Initialize packets array
-    header_size = length(preamble) + length(access_address);
-    packet_total_size = header_size + data_bits_per_packet;
-    packets = zeros(num_packets, packet_total_size);
-    
-    for i = 1:num_packets
-        % Add header
-        packets(i, 1:length(preamble)) = preamble;
-        packets(i, length(preamble)+1:header_size) = access_address;
-        
-        % Add data
-        start_idx = (i-1) * data_bits_per_packet + 1;
-        end_idx = min(i * data_bits_per_packet, length(data));
-        packet_data = data(start_idx:end_idx);
-        
-        if length(packet_data) < data_bits_per_packet
-            packet_data = [packet_data zeros(1, data_bits_per_packet - length(packet_data))];
-        end
-        
-        packets(i, header_size+1:end) = packet_data;
-    end
-end
-
-function encoded = apply_hamming_coding(data)
-    % Add interleaving to prevent burst errors
-    G = [1 1 1 0 1 0 0;
-         1 1 0 1 0 1 0;
-         1 0 1 1 0 0 1;
-         0 1 1 1 0 0 0];
-    
-    % Pad data to multiple of 4
-    pad = mod(4-mod(length(data),4),4);
-    data = [data zeros(1,pad)];
-    
-    % Encode with interleaving
-    encoded = [];
-    for i = 1:4:length(data)
-        block = data(i:i+3);
-        coded_block = mod(block*G,2);
-        % Add block to encoded data with interleaving
-        if i > 1
-            % Interleave with previous block
-            coded_block = circshift(coded_block, mod(i,3));
-        end
-        encoded = [encoded coded_block];
-    end
-end
-
-function whitened = apply_data_whitening(data)
-    % Use a better initial state and longer LFSR
-    lfsr = [1 1 0 1 0 1 1];  % Changed initial state
+function dewhitened = apply_data_dewhitening(data)
+    % Use same improved LFSR configuration
+    lfsr = [1 1 0 1 0 1 1];  % Must match encoding initial state
     seq_len = length(data);
     whitening_seq = zeros(1, seq_len);
     
-    % Generate more random whitening sequence
     for i = 1:seq_len
-        % Use more taps for better randomization
         whitening_seq(i) = lfsr(7);
         new_bit = xor(xor(lfsr(7), lfsr(4)), xor(lfsr(2), lfsr(1)));
         lfsr = [new_bit lfsr(1:6)];
     end
     
-    whitened = xor(data, whitening_seq);
+    dewhitened = xor(data, whitening_seq);
 end
 
-function [I_signal, Q_signal] = apply_gfsk_modulation(data, h_index, samples_per_bit)
-    % Upsample data
-    upsampled = zeros(1, length(data) * samples_per_bit);
-    for i = 1:length(data)
-        upsampled((i-1)*samples_per_bit + 1 : i*samples_per_bit) = 2*data(i) - 1;
+function decoded = apply_hamming_decoding(data)
+    H = [1 0 1 0 1 0 1;
+         0 1 1 0 0 1 1;
+         0 0 0 1 1 1 1];
+    
+    decoded = [];
+    
+    for i = 1:7:length(data)
+        if i+6 <= length(data)
+            % Get block and undo interleaving
+            block = data(i:i+6);
+            if i > 1
+                block = circshift(block, -mod(i-1,3));
+            end
+            
+            % Error correction
+            syndrome = mod(H * block', 2);
+            error_pos = bin2dec(num2str(syndrome'));
+            
+            if error_pos > 0 && error_pos <= 7
+                block(error_pos) = ~block(error_pos);
+            end
+            
+            % Extract data bits
+            decoded = [decoded block([3 5 6 7])];
+        end
+    end
+end
+
+function [depacketized_data, packet_success_rate] = depacketize_data(data, packet_size)
+    % BLE packet parameters
+    preamble = [1 0 1 0 1 0 1 0];
+    preamble_length = length(preamble);
+    access_address_length = 32;
+    header_length = preamble_length + access_address_length;
+    
+    % Calculate total packet length including header
+    total_packet_length = header_length + packet_size * 8;
+    
+    % Split data into packets
+    num_packets = floor(length(data)/total_packet_length);
+    valid_packets = zeros(1, num_packets);
+    depacketized_data = [];
+    
+    for i = 1:num_packets
+        % Extract packet
+        packet_start = (i-1)*total_packet_length + 1;
+        packet_end = i*total_packet_length;
+        packet = data(packet_start:packet_end);
+        
+        % Check preamble
+        received_preamble = packet(1:preamble_length);
+        if isequal(received_preamble, preamble)
+            valid_packets(i) = 1;
+            % Extract payload (skip header)
+            payload = packet(header_length+1:end);
+            depacketized_data = [depacketized_data payload];
+        end
     end
     
-    % Design Gaussian filter
-    BT = 0.5;  % Standard BLE bandwidth-time product
-    span = 4;  % Filter span in symbols
-    t = (-span/2:1/samples_per_bit:span/2);
-    alpha = sqrt(log(2)/(2*(BT^2)));
-    gaussian_filter = exp(-(alpha^2 * t.^2));
-    gaussian_filter = gaussian_filter / sum(gaussian_filter);
+    packet_success_rate = mean(valid_packets);
+end
+
+function reconstructed_image = binary_to_image(binary_data, original_size)
+    % Convert binary data back to image with error handling
+    % Input: binary array and original image size
+    % Output: reconstructed grayscale image
     
-    % Apply Gaussian filter
-    filtered_data = conv(upsampled, gaussian_filter, 'same');
+    % Calculate expected length
+    expected_length = prod(original_size) * 8;
+    actual_length = length(binary_data);
     
-    % Generate phase
-    phase = cumsum(filtered_data) * pi * h_index;
+    % Print debug information
+    fprintf('Debug Information:\n');
+    fprintf('Expected binary data length: %d\n', expected_length);
+    fprintf('Actual binary data length: %d\n', actual_length);
+    fprintf('Original image size: %dx%d\n', original_size(1), original_size(2));
     
-    % Generate I/Q components
-    I_signal = cos(phase);
-    Q_signal = sin(phase);
+    % Handle case where data is shorter than expected
+    if actual_length < expected_length
+        fprintf('Warning: Padding binary data with zeros\n');
+        binary_data = [binary_data, zeros(1, expected_length - actual_length)];
+    end
+    
+    % Handle case where data is longer than expected
+    if actual_length > expected_length
+        fprintf('Warning: Truncating binary data to expected length\n');
+        binary_data = binary_data(1:expected_length);
+    end
+    
+    % Initialize pixel array
+    num_pixels = prod(original_size);
+    pixel_values = zeros(num_pixels, 1, 'uint8');
+    
+    % Convert each 8-bit sequence back to pixel value
+    for i = 1:num_pixels
+        % Get 8 bits for current pixel
+        bit_start = (i-1)*8 + 1;
+        pixel_bits = binary_data(bit_start:bit_start+7);
+        
+        % Convert bits to pixel value
+        pixel_value = sum(pixel_bits .* (2.^(7:-1:0)));
+        pixel_values(i) = pixel_value;
+    end
+    
+    % Reshape back to original image dimensions
+    reconstructed_image = reshape(pixel_values, original_size);
 end
 
 function plot_binary_sample(data, title_str)
@@ -193,27 +214,29 @@ function plot_binary_sample(data, title_str)
     grid on;
 end
 
-function visualize_packets(packets, title_str)
-    imagesc(packets);
+function visualize_packet_success(success_rate, title_str)
+    bar(success_rate * 100);
     title(title_str);
-    xlabel('Bit Position');
-    ylabel('Packet Number');
-    colormap(gray);
-    colorbar;
-end
-
-function plot_iq_components(I, Q)
-    plot(1:length(I), I, 'b-', 1:length(Q), Q, 'r-', 'LineWidth', 1.5);
-    title('I/Q Components');
-    xlabel('Sample Index');
-    ylabel('Amplitude');
-    legend('I', 'Q');
+    xlabel('Overall');
+    ylabel('Success Rate (%)');
+    ylim([0 100]);
     grid on;
 end
 
+function display_error_metrics(received_image, original_size)
+    text_str = sprintf(['Reception Metrics:\n' ...
+                       'Image Size: %dx%d\n' ...
+                       'Total Pixels: %d\n' ...
+                       'Packet Success Rate: %.1f%%\n'], ...
+                       original_size(1), original_size(2), ...
+                       prod(original_size), ...
+                       mean(received_image(:) > 0) * 100);
+    text(0.1, 0.5, text_str, 'FontSize', 12);
+    axis off;
+end
 function plot_constellation(I, Q)
     scatter(I, Q, 10, 'filled');
-    title('Signal Constellation');
+    title('Recieved Signal Constellation');
     xlabel('I');
     ylabel('Q');
     grid on;
