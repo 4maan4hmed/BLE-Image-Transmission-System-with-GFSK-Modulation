@@ -72,13 +72,13 @@ test_ble_system('path/to/your/image.jpg', params);
 ## 📷 Output Images
 Below are the output images generated from different stages of transmission and reception:
 
-1. **Original Image**:
+1. **BLE transmission Stages**:
    ![Original Image](https://github.com/4maan4hmed/BLE-Image-Transmission-System-with-GFSK-Modulation/blob/master/Output/Screenshot%20(501).png)
 
-2. **Transmitted Signal Spectrum**:
+2. **BLE receiver Stages**:
    ![Transmitted Spectrum](https://github.com/4maan4hmed/BLE-Image-Transmission-System-with-GFSK-Modulation/blob/master/Output/Screenshot%20(502).png)
 
-3. **Received Image After Noise**:
+3. **Histrogram of Image Before and After Transmission**:
    ![Received Image](https://github.com/4maan4hmed/BLE-Image-Transmission-System-with-GFSK-Modulation/blob/master/Output/Screenshot%20(503).png)
 
 ## Known Limitations
