@@ -1,4 +1,4 @@
-# 📡 BLE Image Transmission System with GFSK Modulation
+# 📱 BLE Image Transmission System with GFSK Modulation
 
 ## ⚠️ Important Implementation Note
 The current implementation has significant limitations in the packetization system. While the code structure includes packet handling functions, the actual data transmission largely bypasses the packet system due to implementation challenges. This means:
@@ -13,7 +13,7 @@ Users should be aware that this is more of an educational demonstration of GFSK 
 This MATLAB implementation simulates a **Bluetooth Low Energy (BLE)** image transmission system using **Gaussian Frequency Shift Keying (GFSK)**. The system demonstrates image data transmission through an **Additive White Gaussian Noise (AWGN)** channel, incorporating error correction and data whitening techniques.
 
 ## Features
-- 🖼️ **Image Processing**: 
+- 🎨 **Image Processing**: 
   - Supports both RGB and grayscale images
   - Automatic RGB to grayscale conversion
   - Binary data conversion and reconstruction
@@ -69,6 +69,18 @@ params.SNR_dB = 30;
 test_ble_system('path/to/your/image.jpg', params);
 ```
 
+## 📷 Output Images
+Below are the output images generated from different stages of transmission and reception:
+
+1. **Original Image**:
+   ![Original Image](https://github.com/4maan4hmed/BLE-Image-Transmission-System-with-GFSK-Modulation/blob/master/Output/Screenshot%20(501).png)
+
+2. **Transmitted Signal Spectrum**:
+   ![Transmitted Spectrum](https://github.com/4maan4hmed/BLE-Image-Transmission-System-with-GFSK-Modulation/blob/master/Output/Screenshot%20(502).png)
+
+3. **Received Image After Noise**:
+   ![Received Image](https://github.com/4maan4hmed/BLE-Image-Transmission-System-with-GFSK-Modulation/blob/master/Output/Screenshot%20(503).png)
+
 ## Known Limitations
 1. **Major Packetization Issues** 🚨
    - Packet system is mostly non-functional
@@ -117,3 +129,4 @@ All functions include detailed comments explaining their operation. Key files:
 🔬 *Note: This implementation is primarily for educational purposes and demonstrates basic GFSK modulation concepts. It should not be used as a reference for actual BLE protocol implementation.*
 
 For technical questions or contributions, please create an issue or submit a pull request.
+
